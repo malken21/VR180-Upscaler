@@ -16,7 +16,7 @@ jobs:
           - os: windows-latest
             arch: x64
             runtime: win-x64
-          - os: windows-latest-arm64
+          - os: windows-11-arm64
             arch: arm64
             runtime: win-arm64
 
@@ -43,10 +43,28 @@ jobs:
           Compress-Archive -Path ./publish/* -DestinationPath ./$ArchiveName
           echo "ARCHIVE_NAME=$ArchiveName" >> $env:GITHUB_ENV
 
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.arch }}
+          path: ${{ env.ARCHIVE_NAME }}
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: ./dist
+          merge-multiple: true
+
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ARCHIVE_NAME }}
+          files: ./dist/*.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
