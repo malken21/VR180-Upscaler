@@ -45,7 +45,7 @@ namespace VR180_Upscaler
             }
             catch (Exception ex)
             {
-                _logCallback($"[警告] デバイス列挙中にエラーが発生しました: {ex.Message}");
+                _logCallback($"デバイス列挙中にエラーが発生しました: {ex.Message}");
             }
 
             return devices;
@@ -94,7 +94,7 @@ namespace VR180_Upscaler
             if (File.Exists(Config.FfmpegPath))
                 return;
 
-            _logCallback("[報告] FFmpeg が見つかりません。ダウンロードを開始。");
+            _logCallback("FFmpeg が見つかりません。ダウンロードを開始。");
             string zipPath = Path.Combine(Config.BinDir, "ffmpeg.zip");
 
             try
@@ -109,7 +109,7 @@ namespace VR180_Upscaler
                     await stream.CopyToAsync(fs);
                 }
 
-                _logCallback("[了解] ダウンロード完了。展開を開始。");
+                _logCallback("ダウンロード完了。展開を開始。");
                 string extractPath = Path.Combine(Config.BinDir, "extract_temp");
                 if (Directory.Exists(extractPath)) Directory.Delete(extractPath, true);
                 
@@ -120,7 +120,7 @@ namespace VR180_Upscaler
                 if (files.Length > 0)
                 {
                     File.Move(files[0], Config.FfmpegPath, true);
-                    _logCallback("[了解] FFmpeg の配置に成功。");
+                    _logCallback("FFmpeg の配置に成功。");
                 }
                 else
                 {
@@ -132,7 +132,7 @@ namespace VR180_Upscaler
             }
             catch (Exception e)
             {
-                _logCallback($"[警告] FFmpeg の準備に失敗しました: {e.Message}");
+                _logCallback($"FFmpeg の準備に失敗しました: {e.Message}");
                 throw;
             }
         }
@@ -158,7 +158,7 @@ namespace VR180_Upscaler
             _modelManager = new ModelManager(logCallback);
             _ffmpegManager = new FfmpegManager(logCallback);
             Provider = "未初期化";
-            _logCallback("[報告] 推論エンジン準備完了。実行プロバイダーは動的に決定。");
+            _logCallback("推論エンジン準備完了。実行プロバイダーは動的に決定。");
         }
 
         public ModelManager GetModelManager() => _modelManager;
@@ -171,7 +171,7 @@ namespace VR180_Upscaler
         /// <param name="description">ログ用の処理説明。</param>
         private async Task RunCommandAsync(string fileName, string args, string description)
         {
-            _logCallback($"[報告] {description} を開始...");
+            _logCallback($"{description} を開始...");
             var psi = new ProcessStartInfo(fileName, args)
             {
                 RedirectStandardOutput = true,
@@ -188,20 +188,20 @@ namespace VR180_Upscaler
 
                 if (process.ExitCode == 0)
                 {
-                    _logCallback($"[了解] {description} が完了。");
+                    _logCallback($"{description} が完了。");
                 }
                 else
                 {
                     string error = await process.StandardError.ReadToEndAsync();
-                    _logCallback($"[警告] {description} でエラーが発生。");
+                    _logCallback($"{description} でエラーが発生。");
                     if (!string.IsNullOrEmpty(error))
-                        _logCallback($"[詳細] {error}");
+                        _logCallback($"{error}");
                     throw new Exception($"{description} 失敗");
                 }
             }
             catch (Exception ex)
             {
-                _logCallback($"[警告] プロセスの実行に失敗しました: {ex.Message}");
+                _logCallback($"プロセスの実行に失敗しました: {ex.Message}");
                 throw;
             }
         }
@@ -244,7 +244,7 @@ namespace VR180_Upscaler
         /// <returns>横幅と高さのタプル。</returns>
         private async Task<(int w, int h)> GetVideoResolutionAsync(string inputPath)
         {
-            _logCallback("[報告] 入力動画の解像度を確認中...");
+            _logCallback("入力動画の解像度を確認中...");
             // ffprobe がない環境を想定し、ffmpeg -i のエラー出力から解像度をパースする
             var psi = new ProcessStartInfo(Config.FfmpegPath, $"-i \"{inputPath}\"")
             {
@@ -264,7 +264,7 @@ namespace VR180_Upscaler
             {
                 int w = int.Parse(match.Groups[1].Value);
                 int h = int.Parse(match.Groups[2].Value);
-                _logCallback($"[了解] 入力解像度: {w}x{h}");
+                _logCallback($"入力解像度: {w}x{h}");
                 return (w, h);
             }
 
@@ -282,7 +282,7 @@ namespace VR180_Upscaler
             try
             {
                 Provider = _modelManager.GetExecutionProvider(deviceId);
-                _logCallback($"[報告] 実行プロバイダーを設定: {Provider}");
+                _logCallback($"実行プロバイダーを設定: {Provider}");
 
                 // 依存ファイルの準備
                 await _ffmpegManager.EnsureFfmpegAsync();
@@ -296,7 +296,7 @@ namespace VR180_Upscaler
                 targetW = (targetW / 2) * 2;
                 targetH = (targetH / 2) * 2;
 
-                _logCallback($"[報告] ターゲット解像度: {targetW}x{targetH} ({scale}x 倍)");
+                _logCallback($"ターゲット解像度: {targetW}x{targetH} ({scale}x 倍)");
                 
                 string outputDir = Path.GetDirectoryName(inputPath) ?? string.Empty;
                 string outputName = $"upscaled_{scale}x_{Path.GetFileName(inputPath)}";
@@ -305,7 +305,7 @@ namespace VR180_Upscaler
                 // 各ステップの実行
                 await ExtractFramesAsync(inputPath, targetW, targetH);
                 
-                _logCallback("[推測] ONNX 推論ステップは将来の拡張として予約。現在は高品質リサイズのみ。");
+                _logCallback("ONNX 推論ステップは将来の拡張として予約。現在は高品質リサイズのみ。");
 
                 await ReassembleVideoAsync(outputPath);
                 InjectMetadata(outputPath);
@@ -314,11 +314,11 @@ namespace VR180_Upscaler
                 if (Directory.Exists(Config.TempDir))
                     Directory.Delete(Config.TempDir, true);
                 
-                _logCallback($"[報告] 全ての処理が完了しました: {outputPath}");
+                _logCallback($"全ての処理が完了しました: {outputPath}");
             }
             catch (Exception e)
             {
-                _logCallback($"[警告] 処理が異常終了しました: {e.Message}");
+                _logCallback($"処理が異常終了しました: {e.Message}");
             }
         }
 
@@ -329,7 +329,7 @@ namespace VR180_Upscaler
         private void InjectMetadata(string filePath)
         {
             // [将来の拡張] 外部ツールを使用してメタデータを注入するロジックを実装予定
-            _logCallback($"[報告] VR180 メタデータを注入しました: {Path.GetFileName(filePath)}");
+            _logCallback($"VR180 メタデータを注入しました: {Path.GetFileName(filePath)}");
         }
     }
 }
