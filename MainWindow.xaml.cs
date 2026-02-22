@@ -17,7 +17,7 @@ namespace VR180_Upscaler
             InitializeComponent();
             _engine = new UpscaleEngine(LogMessage);
             PopulateDevices();
-            LogMessage("[報告] アプリケーション v1.1.0 を初期化しました。");
+            LogMessage("[報告] アプリケーション v1.1.1 を初期化しました。");
         }
 
         /// <summary>
