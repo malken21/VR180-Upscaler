@@ -8,6 +8,7 @@
     <RootNamespace>VR180_Upscaler</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
