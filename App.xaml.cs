@@ -27,7 +27,7 @@ namespace VR180_Upscaler
 
         private async System.Threading.Tasks.Task RunCliAsync(string[] args)
         {
-            // [報告] CLI モードでの実行を開始。
+            // CLI モードでの実行を開始。
             string inputPath = "";
             double scale = 2.0;
             int deviceId = -1;
@@ -64,7 +64,7 @@ namespace VR180_Upscaler
 
             if (string.IsNullOrEmpty(inputPath))
             {
-                // [警告] 入力パスが指定されていません。
+                // 入力パスが指定されていません。
                 ShowUsage();
                 Shutdown();
                 return;
@@ -72,8 +72,8 @@ namespace VR180_Upscaler
 
             if (!System.IO.File.Exists(inputPath))
             {
-                // [警告] 指定されたファイルが存在しません: inputPath
-                System.Console.WriteLine($"[警告] ファイルが見つかりません: {inputPath}");
+                // 指定されたファイルが存在しません: inputPath
+                System.Console.WriteLine($"ファイルが見つかりません: {inputPath}");
                 Shutdown();
                 return;
             }
@@ -89,7 +89,7 @@ namespace VR180_Upscaler
             }
             catch (System.Exception ex)
             {
-                System.Console.WriteLine($"[警告] 致命的なエラーが発生しました: {ex.Message}");
+                System.Console.WriteLine($"致命的なエラーが発生しました: {ex.Message}");
             }
             finally
             {
