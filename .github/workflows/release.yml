@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+            runtime: win-x64
+          - os: windows-latest-arm64
+            arch: arm64
+            runtime: win-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish
+        run: |
+          dotnet publish VR180-Upscaler.csproj -c Release -r ${{ matrix.runtime }} --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ./publish
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $Version = "${{ github.ref_name }}"
+          $ArchiveName = "VR180-Upscaler-$Version-Windows-${{ matrix.arch }}.zip"
+          Compress-Archive -Path ./publish/* -DestinationPath ./$ArchiveName
+          echo "ARCHIVE_NAME=$ArchiveName" >> $env:GITHUB_ENV
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARCHIVE_NAME }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
