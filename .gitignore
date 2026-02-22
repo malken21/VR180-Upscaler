@@ -1,0 +1,30 @@
+# .NET Core
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+# Editor / OS
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Project specific
+models/
+temp_frames/
+output/
+temp/
+*.mp4
+*.mkv
+*.avi
+*.onnx
