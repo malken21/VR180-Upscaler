@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -346,22 +347,44 @@ namespace VR180_Upscaler
                     string outputFrameName = $"upscaled_frame_{(i + 1):D5}.jpg";
                     string outputFramePath = Path.Combine(Config.TempDir, outputFrameName);
 
-                    // 画像の読み込みと NCHW float32 テンソル変換
-                    using var bmp = System.Drawing.Image.FromFile(framePath);
-                    using var bmpResized = new System.Drawing.Bitmap(bmp);
+                    // 画像の読み込みと NCHW float32 テンソル変換 (LockBits による高速化)
+                    using var bmpSrc = System.Drawing.Image.FromFile(framePath);
+                    using var bmpResized = new System.Drawing.Bitmap(bmpSrc);
                     int h = bmpResized.Height;
                     int w = bmpResized.Width;
                     var inputData = new float[1 * 3 * h * w];
-                    for (int y = 0; y < h; y++)
+
+                    // Format24bppRgb に変換して LockBits でメモリを直接参照
+                    using var bmp24 = bmpResized.Clone(
+                        new System.Drawing.Rectangle(0, 0, w, h),
+                        System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                    var bmpData = bmp24.LockBits(
+                        new System.Drawing.Rectangle(0, 0, w, h),
+                        System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                        System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                    try
                     {
-                        for (int x = 0; x < w; x++)
+                        int stride = bmpData.Stride;
+                        byte[] rowBuf = new byte[stride];
+                        int planeSize = h * w;
+                        for (int y = 0; y < h; y++)
                         {
-                            var pixel = bmpResized.GetPixel(x, y);
-                            int idx = y * w + x;
-                            inputData[0 * h * w + idx] = pixel.R / 255f;
-                            inputData[1 * h * w + idx] = pixel.G / 255f;
-                            inputData[2 * h * w + idx] = pixel.B / 255f;
+                            // 1行分を配列にコピー
+                            Marshal.Copy(bmpData.Scan0 + y * stride, rowBuf, 0, stride);
+                            int rowBase = y * w;
+                            for (int x = 0; x < w; x++)
+                            {
+                                // BGRレイアウト
+                                int bmpOff = x * 3;
+                                inputData[0 * planeSize + rowBase + x] = rowBuf[bmpOff + 2] / 255f; // R
+                                inputData[1 * planeSize + rowBase + x] = rowBuf[bmpOff + 1] / 255f; // G
+                                inputData[2 * planeSize + rowBase + x] = rowBuf[bmpOff + 0] / 255f; // B
+                            }
                         }
+                    }
+                    finally
+                    {
+                        bmp24.UnlockBits(bmpData);
                     }
 
                     // 推論実行
@@ -370,20 +393,35 @@ namespace VR180_Upscaler
                     using var results = session.Run(inputs);
                     var output = results.First().AsTensor<float>();
 
-                    // 出力テンソルを画像に変換
+                    // 出力テンソルを画像に変換 (LockBits による高速化)
                     int outH = output.Dimensions[2];
                     int outW = output.Dimensions[3];
-                    using var outBmp = new System.Drawing.Bitmap(outW, outH);
-                    for (int y = 0; y < outH; y++)
+                    using var outBmp = new System.Drawing.Bitmap(outW, outH, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                    var outBmpData = outBmp.LockBits(
+                        new System.Drawing.Rectangle(0, 0, outW, outH),
+                        System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                        System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                    try
                     {
-                        for (int x = 0; x < outW; x++)
+                        int outStride = outBmpData.Stride;
+                        byte[] outRowBuf = new byte[outStride];
+                        int outPlane = outH * outW;
+                        for (int y = 0; y < outH; y++)
                         {
-                            int idx = y * outW + x;
-                            int r = (int)Math.Clamp(output[0, 0, y, x] * 255f, 0f, 255f);
-                            int g = (int)Math.Clamp(output[0, 1, y, x] * 255f, 0f, 255f);
-                            int b = (int)Math.Clamp(output[0, 2, y, x] * 255f, 0f, 255f);
-                            outBmp.SetPixel(x, y, System.Drawing.Color.FromArgb(r, g, b));
+                            for (int x = 0; x < outW; x++)
+                            {
+                                // BGRレイアウトで書き込む
+                                int bmpOff = x * 3;
+                                outRowBuf[bmpOff + 2] = (byte)Math.Clamp(output[0, 0, y, x] * 255f, 0f, 255f); // R
+                                outRowBuf[bmpOff + 1] = (byte)Math.Clamp(output[0, 1, y, x] * 255f, 0f, 255f); // G
+                                outRowBuf[bmpOff + 0] = (byte)Math.Clamp(output[0, 2, y, x] * 255f, 0f, 255f); // B
+                            }
+                            Marshal.Copy(outRowBuf, 0, outBmpData.Scan0 + y * outStride, outStride);
                         }
+                    }
+                    finally
+                    {
+                        outBmp.UnlockBits(outBmpData);
                     }
                     outBmp.Save(outputFramePath, System.Drawing.Imaging.ImageFormat.Jpeg);
 
