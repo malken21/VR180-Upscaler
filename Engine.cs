@@ -486,13 +486,13 @@ namespace VR180_Upscaler
         }
 
         /// <summary>
-        /// 動画ファイルに VR180 空間メタデータを注入する（スタブ実装）。
+        /// 動画ファイルに VR180 空間メタデータを注入する。
+        /// Spherical Video V2 仕様に基づき st3d / sv3d ボックスを MP4 に直接書き込む。
         /// </summary>
         /// <param name="filePath">対象ファイルパス。</param>
         private void InjectMetadata(string filePath)
         {
-            // [将来の拡張] 外部ツールを使用してメタデータを注入するロジックを実装予定
-            _logCallback($"VR180 メタデータを注入しました: {Path.GetFileName(filePath)}");
+            SphericalMetadataInjector.Inject(filePath, _logCallback);
         }
     }
 }
