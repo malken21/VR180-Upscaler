@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
+using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace VR180_Upscaler
 {
@@ -62,13 +63,49 @@ namespace VR180_Upscaler
         }
 
         /// <summary>
-        /// 実行に必要なモデルファイルが存在することを確認し、必要に応じて準備する。
+        /// 実行に必要なモデルファイルが存在することを確認し、必要に応じて ZIP をダウンロードして展開する。
         /// </summary>
         /// <param name="deviceId">ターゲットデバイス ID。</param>
         public async Task EnsureModelAsync(int deviceId)
         {
-            // [将来の拡張] モデルファイルをダウンロード・配置するロジックを実装予定
-            await Task.CompletedTask;
+            string modelPath = System.IO.Path.Combine(Config.ModelsDir, Config.ModelName);
+            if (File.Exists(modelPath))
+            {
+                _logCallback($"モデルを確認: {Config.ModelName}");
+                return;
+            }
+
+            if (!Directory.Exists(Config.ModelsDir))
+                Directory.CreateDirectory(Config.ModelsDir);
+
+            _logCallback($"モデルが見つかりません。ダウンロードを開始: {Config.ModelName}");
+            string zipPath = System.IO.Path.Combine(Config.ModelsDir, "model_temp.zip");
+
+            try
+            {
+                using var client = new HttpClient();
+                client.Timeout = TimeSpan.FromMinutes(10);
+                using var response = await client.GetAsync(Config.ModelZipUrl, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+
+                using (var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                using (var stream = await response.Content.ReadAsStreamAsync())
+                    await stream.CopyToAsync(fs);
+
+                _logCallback("モデルアーカイブのダウンロード完了。展開中...");
+
+                using var archive = ZipFile.OpenRead(zipPath);
+                var entry = archive.GetEntry(Config.ModelZipInternalPath)
+                    ?? throw new FileNotFoundException($"ZIP 内にモデルが見つかりません: {Config.ModelZipInternalPath}");
+                entry.ExtractToFile(modelPath, overwrite: true);
+
+                _logCallback($"モデルの配置に成功: {Config.ModelName}");
+            }
+            finally
+            {
+                if (File.Exists(zipPath))
+                    File.Delete(zipPath);
+            }
         }
     }
 
@@ -231,7 +268,7 @@ namespace VR180_Upscaler
         /// <param name="outputPath">出力動画パス。</param>
         private async Task ReassembleVideoAsync(string outputPath)
         {
-            string inputFormat = Path.Combine(Config.TempDir, "frame_%05d.jpg");
+            string inputFormat = Path.Combine(Config.TempDir, "upscaled_frame_%05d.jpg");
             string args = $"-y -framerate {Config.DefaultFramerate} -i \"{inputFormat}\" -c:v {Config.VideoCodec} -pix_fmt {Config.PixelFormat} -preset {Config.EncodePreset} -crf {Config.EncodeCrf} \"{outputPath}\"";
             
             await RunCommandAsync(Config.FfmpegPath, args, "動画の再構築");
@@ -272,6 +309,93 @@ namespace VR180_Upscaler
         }
 
         /// <summary>
+        /// 一時ディレクトリ内の全フレームに対して ONNX 推論アップスケールを実行する。
+        /// </summary>
+        /// <param name="modelPath">ONNX モデルファイルのパス。</param>
+        /// <param name="deviceId">出力デバイス ID。</param>
+        private async Task UpscaleFramesAsync(string modelPath, int deviceId)
+        {
+            await Task.Run(() =>
+            {
+                // ONNX セッションオプションの構築
+                var options = new SessionOptions();
+                if (deviceId >= 0)
+                {
+                    options.AppendExecutionProvider_DML(deviceId);
+                    _logCallback($"DirectML デバイス {deviceId} を使用します。");
+                }
+                else
+                {
+                    _logCallback("CPU で推論を実行します。");
+                }
+                options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+
+                using var session = new InferenceSession(modelPath, options);
+                string inputName = session.InputMetadata.Keys.First();
+                string outputName = session.OutputMetadata.Keys.First();
+
+                string[] frames = Directory.GetFiles(Config.TempDir, "frame_*.jpg")
+                    .OrderBy(f => f)
+                    .ToArray();
+
+                _logCallback($"ONNX 推論開始: {frames.Length} フレーム");
+
+                for (int i = 0; i < frames.Length; i++)
+                {
+                    string framePath = frames[i];
+                    string outputFrameName = $"upscaled_frame_{(i + 1):D5}.jpg";
+                    string outputFramePath = Path.Combine(Config.TempDir, outputFrameName);
+
+                    // 画像の読み込みと NCHW float32 テンソル変換
+                    using var bmp = System.Drawing.Image.FromFile(framePath);
+                    using var bmpResized = new System.Drawing.Bitmap(bmp);
+                    int h = bmpResized.Height;
+                    int w = bmpResized.Width;
+                    var inputData = new float[1 * 3 * h * w];
+                    for (int y = 0; y < h; y++)
+                    {
+                        for (int x = 0; x < w; x++)
+                        {
+                            var pixel = bmpResized.GetPixel(x, y);
+                            int idx = y * w + x;
+                            inputData[0 * h * w + idx] = pixel.R / 255f;
+                            inputData[1 * h * w + idx] = pixel.G / 255f;
+                            inputData[2 * h * w + idx] = pixel.B / 255f;
+                        }
+                    }
+
+                    // 推論実行
+                    var inputTensor = new DenseTensor<float>(inputData, new[] { 1, 3, h, w });
+                    var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
+                    using var results = session.Run(inputs);
+                    var output = results.First().AsTensor<float>();
+
+                    // 出力テンソルを画像に変換
+                    int outH = output.Dimensions[2];
+                    int outW = output.Dimensions[3];
+                    using var outBmp = new System.Drawing.Bitmap(outW, outH);
+                    for (int y = 0; y < outH; y++)
+                    {
+                        for (int x = 0; x < outW; x++)
+                        {
+                            int idx = y * outW + x;
+                            int r = (int)Math.Clamp(output[0, 0, y, x] * 255f, 0f, 255f);
+                            int g = (int)Math.Clamp(output[0, 1, y, x] * 255f, 0f, 255f);
+                            int b = (int)Math.Clamp(output[0, 2, y, x] * 255f, 0f, 255f);
+                            outBmp.SetPixel(x, y, System.Drawing.Color.FromArgb(r, g, b));
+                        }
+                    }
+                    outBmp.Save(outputFramePath, System.Drawing.Imaging.ImageFormat.Jpeg);
+
+                    if ((i + 1) % 10 == 0 || i == frames.Length - 1)
+                        _logCallback($"ONNX 推論: {i + 1}/{frames.Length} フレーム完了");
+                }
+
+                _logCallback("全フレームの ONNX 推論完了。");
+            });
+        }
+
+        /// <summary>
         /// アップスケール処理のメインパイプラインを実行する。
         /// </summary>
         /// <param name="inputPath">入力動画パス。</param>
@@ -303,9 +427,10 @@ namespace VR180_Upscaler
                 string outputPath = Path.Combine(outputDir, outputName);
 
                 // 各ステップの実行
-                await ExtractFramesAsync(inputPath, targetW, targetH);
-                
-                _logCallback("ONNX 推論ステップは将来の拡張として予約。現在は高品質リサイズのみ。");
+                await ExtractFramesAsync(inputPath, srcW, srcH);
+
+                string modelPath = System.IO.Path.Combine(Config.ModelsDir, Config.ModelName);
+                await UpscaleFramesAsync(modelPath, deviceId);
 
                 await ReassembleVideoAsync(outputPath);
                 InjectMetadata(outputPath);

@@ -18,9 +18,11 @@ namespace VR180_Upscaler
         public static readonly string BinDir = System.IO.Path.Combine(BaseDir, "bin");
         
         /// <summary>使用する ONNX モデルのファイル名。</summary>
-        public const string ModelName = "realesr-animevideov3.onnx";
-        /// <summary>モデルファイルのダウンロード URL。</summary>
-        public const string ModelUrl = "https://github.com/YoshitakaMo/Real-ESRGAN-ONNX/releases/download/v0.0.1/realesr-animevideov3.onnx";
+        public const string ModelName = "2x_AnimeJaNai_HD_V3_Compact.onnx";
+        /// <summary>モデルアーカイブのダウンロード URL（ZIP 形式）。</summary>
+        public const string ModelZipUrl = "https://github.com/the-database/mpv-upscale-2x_animejanai/releases/download/3.0.0/2x_AnimeJaNai_HD_V3_ModelsOnly.zip";
+        /// <summary>ZIP アーカイブ内のモデルファイルパス。</summary>
+        public const string ModelZipInternalPath = "2x_AnimeJaNai_HD_V3_ModelsOnly/2x_AnimeJaNai_HD_V3_Compact.onnx";
 
         /// <summary>FFmpeg 配布元 URL (gyan.dev)。</summary>
         public const string FfmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
