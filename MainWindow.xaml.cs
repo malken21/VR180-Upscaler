@@ -17,7 +17,7 @@ namespace VR180_Upscaler
             InitializeComponent();
             _engine = new UpscaleEngine(LogMessage);
             PopulateDevices();
-            LogMessage("[報告] アプリケーション v1.1.2 を初期化しました。");
+            LogMessage("アプリケーションを初期化しました。");
         }
 
         /// <summary>
@@ -73,7 +73,7 @@ namespace VR180_Upscaler
                     int deviceId = selectedItem != null ? (int)selectedItem.Tag : -1;
                     string providerName = selectedItem?.Content.ToString() ?? "Unknown";
 
-                    LogMessage($"[報告] 処理開始: {file} (倍率: {multiplierStr}, デバイス: {providerName})");
+                    LogMessage($"処理開始: {file} (倍率: {multiplierStr}, デバイス: {providerName})");
                     
                     // 処理中はドロップを無効化
                     AllowDrop = false;
