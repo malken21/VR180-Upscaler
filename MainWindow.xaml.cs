@@ -5,6 +5,9 @@ using System.Windows.Controls;
 
 namespace VR180_Upscaler
 {
+    /// <summary>
+    /// アプリケーションのメインウィンドウ。ユーザーとの対話と処理の開始を担当する。
+    /// </summary>
     public partial class MainWindow : Window
     {
         private UpscaleEngine _engine;
@@ -17,6 +20,9 @@ namespace VR180_Upscaler
             LogMessage("[報告] アプリケーションを初期化しました。");
         }
 
+        /// <summary>
+        /// 利用可能なデバイスを列挙し、コンボボックスに反映する。
+        /// </summary>
         private void PopulateDevices()
         {
             var devices = _engine.GetModelManager().GetAvailableDevices();
@@ -32,6 +38,10 @@ namespace VR180_Upscaler
             ProviderComboBox.SelectedIndex = 0;
         }
 
+        /// <summary>
+        /// ログメッセージを UI のテキストボックスに出力する。
+        /// </summary>
+        /// <param name="message">出力するメッセージ。</param>
         private void LogMessage(string message)
         {
             Dispatcher.InvokeAsync(() =>
@@ -41,6 +51,9 @@ namespace VR180_Upscaler
             });
         }
 
+        /// <summary>
+        /// ファイルがドロップされた際のイベントハンドラー。
+        /// </summary>
         private async void Window_Drop(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
@@ -60,8 +73,9 @@ namespace VR180_Upscaler
                     int deviceId = selectedItem != null ? (int)selectedItem.Tag : -1;
                     string providerName = selectedItem?.Content.ToString() ?? "Unknown";
 
-                    LogMessage($"[報告] 処理開始: {file} (Scale: {multiplierStr}, Device: {providerName})");
+                    LogMessage($"[報告] 処理開始: {file} (倍率: {multiplierStr}, デバイス: {providerName})");
                     
+                    // 処理中はドロップを無効化
                     AllowDrop = false;
                     try
                     {

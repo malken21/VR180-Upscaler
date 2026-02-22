@@ -19,15 +19,41 @@ VR180 SBS (Side-by-Side) 動画を AI を用いてアップスケールするた
 
 ## 使用方法
 
-1. `VR180-Upscaler.exe` を実行して GUI を起動。
-2. 「Scale Factor」から出力倍率を選択（1x, 2x, 4x）。
-3. 「Execution Provider」から使用するデバイス（CPU、または列挙された特定の GPU デバイス）を選択。
-4. 対象の VR180 SBS 動画ファイルをウィンドウにドラッグ＆ドロップして処理を開始。
-5. 処理完了後、入力ファイルと同じディレクトリに `upscaled_[scale]x_...` という名称で保存される。
+### GUI モード
+
+1. `VR180-Upscaler.exe` を実行。
+2. 「Scale Factor」から出力倍率を選択。
+3. 「Execution Provider」から使用するデバイスを選択。
+4. 対象の VR180 SBS 動画ファイルをウィンドウにドラッグ＆ドロップ。
+
+### CLI モード
+
+コマンドラインから引数を指定して実行することで、GUI を介さずに処理が可能です。
+
+```powershell
+.\VR180-Upscaler.exe [input_path] [options]
+```
+
+**オプション:**
+
+- `-i, --input <path>`   入力動画ファイルのパス
+- `-s, --scale <value>`   アップスケール倍率 (デフォルト: 2.0)
+- `-d, --device <id>`    実行デバイス ID (-1: CPU, 0以上: GPU) (デフォルト: -1)
+- `-h, --help           ヘルプを表示`
+
+**実行例:**
+
+```powershell
+# 基本的な実行 (2x, CPU)
+.\VR180-Upscaler.exe "video.mp4"
+
+# 倍率とデバイスを指定
+.\VR180-Upscaler.exe -i "video.mp4" -s 1.5 -d 0
+```
 
 ## 技術仕様
 
-- **GUI**: WPF (C# / XAML)
-- **推論エンジン**: ONNX Runtime (CPU / DirectML)
-- **動画処理**: FFmpeg 外部プロセス呼び出し
+- **GUI**: WPF (.NET 8.0)
+- **推論エンジン**: ONNX Runtime (DirectML)
+- **動画処理**: FFmpeg (外部プロセス呼び出し)
 - **AI モデル**: Real-ESRGAN ベース
